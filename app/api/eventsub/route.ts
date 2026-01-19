@@ -193,7 +193,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
 
-      const guessCount = getGuessCount(broadcasterId)
+      const guessCount = await getGuessCount(broadcasterId)
       const status = current.open ? "open" : "closed";
       const remainingMs =
         current.endsAt && current.open ? current.endsAt - Date.now() : null;

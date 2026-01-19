@@ -45,11 +45,11 @@ export async function setGuess(broadcasterId: string, userId: string, entry: Gue
 }
 
 export async function getAllGuesses(broadcasterId: string): Promise<Record<string, GuessEntry>> {
-  const raw = (await redis.hgetall<Record<string, string>>(GUESSES_KEY(broadcasterId))) ?? {};
+  const raw = (await redis.hgetall<Record<string, object>>(GUESSES_KEY(broadcasterId))) ?? {};
   const out: Record<string, GuessEntry> = {};
   for (const [userId, json] of Object.entries(raw)) {
     try {
-      out[userId] = JSON.parse(json) as GuessEntry;
+      out[userId] = json as GuessEntry;
     } catch {
       // ignore bad entry
     }
