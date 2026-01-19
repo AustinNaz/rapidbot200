@@ -1,8 +1,17 @@
- export async function sendChatMessage(message: string) {
-  const clientId = process.env.TWITCH_CLIENT_ID!;
-  const token = process.env.TWITCH_ACCESS_TOKEN!;
-  const broadcasterId = process.env.BROADCASTER_ID!;
-  const senderId = process.env.BOT_USER_ID!;
+import { getBotAccessToken } from "./twitch-token";
+
+function must(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
+}
+
+export async function sendChatMessage(message: string) {
+  const clientId = must("TWITCH_CLIENT_ID");
+  const broadcasterId = must("BROADCASTER_ID");
+  const senderId = must("BOT_USER_ID");
+
+  const token = await getBotAccessToken();
 
   const res = await fetch("https://api.twitch.tv/helix/chat/messages", {
     method: "POST",
@@ -19,19 +28,18 @@
   });
 
   const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    console.error("sendChatMessage failed:", res.status, data);
-  }
+  if (!res.ok) console.error("sendChatMessage failed:", res.status, data);
   return { ok: res.ok, status: res.status, data };
 }
 
 export async function createChatMessageSubscription() {
-  const clientId = process.env.TWITCH_CLIENT_ID!;
-  const token = process.env.TWITCH_ACCESS_TOKEN!;
-  const broadcasterId = process.env.BROADCASTER_ID!;
-  const botUserId = process.env.BOT_USER_ID!;
-  const callback = process.env.EVENTSUB_CALLBACK!;
-  const secret = process.env.EVENTSUB_SECRET!;
+  const clientId = must("TWITCH_CLIENT_ID");
+  const broadcasterId = must("BROADCASTER_ID");
+  const botUserId = must("BOT_USER_ID");
+  const callback = must("EVENTSUB_CALLBACK");
+  const secret = must("EVENTSUB_SECRET");
+
+  const token = await getBotAccessToken();
 
   const body = {
     type: "channel.chat.message",
@@ -58,8 +66,6 @@ export async function createChatMessageSubscription() {
   });
 
   const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    console.error("createChatMessageSubscription failed:", res.status, data);
-  }
+  if (!res.ok) console.error("createChatMessageSubscription failed:", res.status, data);
   return { ok: res.ok, status: res.status, data };
 }
