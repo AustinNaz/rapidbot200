@@ -184,6 +184,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    // !currentround
+    if (/^!currentround\s*$/i.test(text) && isModOrBroadcaster(event)) {
+      const current = round ?? (await getRound(broadcasterId));
+      if (!current) {
+        await sendChatMessage("No round running.");
+        return NextResponse.json({ ok: true });
+      }
+
+      const guesses = await getAllGuesses(broadcasterId);
+      const guessCount = Object.keys(guesses).length;
+      const status = current.open ? "open" : "closed";
+      const remainingMs =
+        current.endsAt && current.open ? current.endsAt - Date.now() : null;
+      const timePart =
+        remainingMs !== null
+          ? remainingMs > 0
+            ? `, ${Math.ceil(remainingMs / 1000)}s left`
+            : ", time ended"
+          : "";
+
+      await sendChatMessage(
+        `🎯 Round ${status}: ${current.min}-${current.max}${timePart}. Number of guesses so far: ${guessCount}. Guess with !guess <number>`,
+      );
+      return NextResponse.json({ ok: true });
+    }
+
     // !guess <n>
     const guess = parseGuess(text);
     if (guess !== null) {
