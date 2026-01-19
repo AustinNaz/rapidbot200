@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import { verifyEventSubSignature } from "@/lib/eventsub-verify";
 import { sendChatMessage } from "@/lib/twitch";
-import { endRound, getAllGuesses, getRound, pickWinner, setGuess, setRound } from "@/lib/guess-state";
+import {
+  endRound,
+  getAllGuesses,
+  getRound,
+  pickWinner,
+  setGuess,
+  setRound,
+} from "@/lib/guess-state";
 
 export const runtime = "nodejs"; // ensure Node crypto works on Vercel
 
@@ -29,7 +36,10 @@ function parseGuess(text: string) {
 function isModOrBroadcaster(event: any) {
   const badges: Array<{ set_id: string }> = event?.badges ?? [];
   const isMod = badges.some((b) => b.set_id === "moderator");
-  const isBroadcaster = event?.chatter_user_id && event?.broadcaster_user_id && event.chatter_user_id === event.broadcaster_user_id;
+  const isBroadcaster =
+    event?.chatter_user_id &&
+    event?.broadcaster_user_id &&
+    event.chatter_user_id === event.broadcaster_user_id;
   return isMod || isBroadcaster;
 }
 
@@ -66,6 +76,16 @@ export async function POST(req: Request) {
   const bodyText = new TextDecoder().decode(rawBuf);
   const payload = JSON.parse(bodyText) as EventSubEnvelope;
 
+  if (msgType === "notification") {
+    console.log("EventSub notification:", payload.subscription?.type);
+  } else if (msgType === "revocation") {
+    console.error("EventSub revoked:", payload);
+  }
+
+  if (msgType !== "keepalive") {
+    console.log("EventSub:", msgType);
+  }
+
   // 1) Verification handshake
   if (msgType === "webhook_callback_verification") {
     return new NextResponse(payload.challenge ?? "", { status: 200 });
@@ -79,7 +99,8 @@ export async function POST(req: Request) {
 
     const event = payload.event;
     const text: string = event?.message?.text ?? "";
-    const broadcasterId: string = event?.broadcaster_user_id ?? process.env.BROADCASTER_ID!;
+    const broadcasterId: string =
+      event?.broadcaster_user_id ?? process.env.BROADCASTER_ID!;
     const chatterId: string = event?.chatter_user_id;
     const chatterName: string = event?.chatter_user_name ?? "someone";
 
@@ -91,7 +112,9 @@ export async function POST(req: Request) {
       const target = randInt(min, max);
 
       const now = Date.now();
-      const endsAt = start.durationSec ? now + start.durationSec * 1000 : undefined;
+      const endsAt = start.durationSec
+        ? now + start.durationSec * 1000
+        : undefined;
 
       await setRound(broadcasterId, {
         open: true,
@@ -102,7 +125,9 @@ export async function POST(req: Request) {
         endsAt,
       });
 
-      await sendChatMessage(`🎯 Guessing started! Pick ${min}-${max} with !guess <number>${start.durationSec ? ` (ends in ${start.durationSec}s)` : ""}`);
+      await sendChatMessage(
+        `🎯 Guessing started! Pick ${min}-${max} with !guess <number>${start.durationSec ? ` (ends in ${start.durationSec}s)` : ""}`,
+      );
       return NextResponse.json({ ok: true });
     }
 
@@ -119,10 +144,12 @@ export async function POST(req: Request) {
 
       const winner = pickWinner(round.target, guesses);
       if (!winner) {
-        await sendChatMessage(`Round ended! Target was ${round.target}. No valid guesses 😅`);
+        await sendChatMessage(
+          `Round ended! Target was ${round.target}. No valid guesses 😅`,
+        );
       } else {
         await sendChatMessage(
-          `🏆 Target was ${round.target}. Winner: ${winner.entry.name} (guessed ${winner.entry.guess}, off by ${winner.diff})`
+          `🏆 Target was ${round.target}. Winner: ${winner.entry.name} (guessed ${winner.entry.guess}, off by ${winner.diff})`,
         );
       }
       return NextResponse.json({ ok: true });
@@ -135,10 +162,12 @@ export async function POST(req: Request) {
       const guesses = await getAllGuesses(broadcasterId);
       const winner = pickWinner(round.target, guesses);
       if (!winner) {
-        await sendChatMessage(`⏱️ Time! Target was ${round.target}. No valid guesses 😅`);
+        await sendChatMessage(
+          `⏱️ Time! Target was ${round.target}. No valid guesses 😅`,
+        );
       } else {
         await sendChatMessage(
-          `⏱️ Time! Target was ${round.target}. Winner: ${winner.entry.name} (guessed ${winner.entry.guess}, off by ${winner.diff})`
+          `⏱️ Time! Target was ${round.target}. Winner: ${winner.entry.name} (guessed ${winner.entry.guess}, off by ${winner.diff})`,
         );
       }
       return NextResponse.json({ ok: true });
@@ -150,7 +179,8 @@ export async function POST(req: Request) {
       const current = round ?? (await getRound(broadcasterId));
       if (!current || !current.open) return NextResponse.json({ ok: true });
 
-      if (guess < current.min || guess > current.max) return NextResponse.json({ ok: true });
+      if (guess < current.min || guess > current.max)
+        return NextResponse.json({ ok: true });
 
       await setGuess(broadcasterId, chatterId, {
         name: chatterName,
