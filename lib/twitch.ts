@@ -1,4 +1,5 @@
 import { getBotAccessToken } from "./twitch-token";
+import { getAppAccessToken } from "./twitch-app-token";
 
 function must(name: string) {
   const v = process.env[name];
@@ -7,6 +8,7 @@ function must(name: string) {
 }
 
 export async function sendChatMessage(message: string) {
+  // Sending chat uses the BOT user token
   const clientId = must("TWITCH_CLIENT_ID");
   const broadcasterId = must("BROADCASTER_ID");
   const senderId = must("BOT_USER_ID");
@@ -20,26 +22,22 @@ export async function sendChatMessage(message: string) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      broadcaster_id: broadcasterId,
-      sender_id: senderId,
-      message,
-    }),
+    body: JSON.stringify({ broadcaster_id: broadcasterId, sender_id: senderId, message }),
   });
 
   const data = await res.json().catch(() => null);
-  if (!res.ok) console.error("sendChatMessage failed:", res.status, data);
   return { ok: res.ok, status: res.status, data };
 }
 
 export async function createChatMessageSubscription() {
+  // Creating WEBHOOK EventSub subs must use APP access token :contentReference[oaicite:2]{index=2}
   const clientId = must("TWITCH_CLIENT_ID");
   const broadcasterId = must("BROADCASTER_ID");
   const botUserId = must("BOT_USER_ID");
   const callback = must("EVENTSUB_CALLBACK");
   const secret = must("EVENTSUB_SECRET");
 
-  const token = await getBotAccessToken();
+  const appToken = await getAppAccessToken();
 
   const body = {
     type: "channel.chat.message",
@@ -59,13 +57,12 @@ export async function createChatMessageSubscription() {
     method: "POST",
     headers: {
       "Client-Id": clientId,
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${appToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
   });
 
   const data = await res.json().catch(() => null);
-  if (!res.ok) console.error("createChatMessageSubscription failed:", res.status, data);
   return { ok: res.ok, status: res.status, data };
 }
