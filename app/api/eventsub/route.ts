@@ -5,6 +5,7 @@ import {
   endRound,
   finalizeRound,
   getAllGuesses,
+  getGuessCount,
   getRound,
   pickWinner,
   setGuess,
@@ -192,8 +193,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
 
-      const guesses = await getAllGuesses(broadcasterId);
-      const guessCount = Object.keys(guesses).length;
+      const guessCount = getGuessCount(broadcasterId)
       const status = current.open ? "open" : "closed";
       const remainingMs =
         current.endsAt && current.open ? current.endsAt - Date.now() : null;

@@ -57,6 +57,12 @@ export async function getAllGuesses(broadcasterId: string): Promise<Record<strin
   return out;
 }
 
+export async function getGuessCount(broadcasterId: string): Promise<number> {
+  // hlen = number of fields in the hash
+  const count = await redis.hlen(GUESSES_KEY(broadcasterId));
+  return count ?? 0;
+}
+
 export function pickWinner(target: number, guesses: Record<string, GuessEntry>) {
   let winner: { userId: string; entry: GuessEntry; diff: number } | null = null;
 
