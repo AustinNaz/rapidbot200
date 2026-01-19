@@ -3,6 +3,7 @@ import { verifyEventSubSignature } from "@/lib/eventsub-verify";
 import { sendChatMessage } from "@/lib/twitch";
 import {
   endRound,
+  finalizeRound,
   getAllGuesses,
   getRound,
   pickWinner,
@@ -27,6 +28,12 @@ function parseStartCommand(text: string) {
   return { min, max, durationSec };
 }
 
+function parseEndCommand(text: string) {
+  const m = text.trim().match(/^!guessend\s+(-?\d+)\s*$/i);
+  if (!m) return null;
+  return Number(m[1]);
+}
+
 function parseGuess(text: string) {
   const m = text.trim().match(/^!guess\s+(-?\d+)\s*$/i);
   if (!m) return null;
@@ -41,12 +48,6 @@ function isModOrBroadcaster(event: any) {
     event?.broadcaster_user_id &&
     event.chatter_user_id === event.broadcaster_user_id;
   return isMod || isBroadcaster;
-}
-
-function randInt(min: number, max: number) {
-  const lo = Math.min(min, max);
-  const hi = Math.max(min, max);
-  return Math.floor(Math.random() * (hi - lo + 1)) + lo;
 }
 
 export async function POST(req: Request) {
@@ -109,7 +110,6 @@ export async function POST(req: Request) {
     if (start && isModOrBroadcaster(event)) {
       const min = Math.min(start.min, start.max);
       const max = Math.max(start.min, start.max);
-      const target = randInt(min, max);
 
       const now = Date.now();
       const endsAt = start.durationSec
@@ -120,38 +120,43 @@ export async function POST(req: Request) {
         open: true,
         min,
         max,
-        target,
+        target: null,
         startedAt: now,
         endsAt,
       });
 
       await sendChatMessage(
-        `🎯 Guessing started! Pick ${min}-${max} with !guess <number>${start.durationSec ? ` (ends in ${start.durationSec}s)` : ""}`,
+        `🎯 Guessing started! Pick ${min}-${max} with !guess <number>${start.durationSec ? ` (ends in ${start.durationSec}s)` : ""}. End with !guessend <target>`,
       );
       return NextResponse.json({ ok: true });
     }
 
-    // !guessend
-    if (/^!guessend\s*$/i.test(text) && isModOrBroadcaster(event)) {
+    // !guessend <target>
+    const endTarget = parseEndCommand(text);
+    if (endTarget !== null && isModOrBroadcaster(event)) {
       const round = await getRound(broadcasterId);
       if (!round) {
         await sendChatMessage("No round running.");
         return NextResponse.json({ ok: true });
       }
 
-      await endRound(broadcasterId);
+      await finalizeRound(broadcasterId, endTarget);
       const guesses = await getAllGuesses(broadcasterId);
 
-      const winner = pickWinner(round.target, guesses);
+      const winner = pickWinner(endTarget, guesses);
       if (!winner) {
         await sendChatMessage(
-          `Round ended! Target was ${round.target}. No valid guesses 😅`,
+          `Round ended! Target was ${endTarget}. No valid guesses 😅`,
         );
       } else {
         await sendChatMessage(
-          `🏆 Target was ${round.target}. Winner: ${winner.entry.name} (guessed ${winner.entry.guess}, off by ${winner.diff})`,
+          `🏆 Target was ${endTarget}. Winner: ${winner.entry.name} (guessed ${winner.entry.guess}, off by ${winner.diff})`,
         );
       }
+      return NextResponse.json({ ok: true });
+    }
+    if (/^!guessend\s*$/i.test(text) && isModOrBroadcaster(event)) {
+      await sendChatMessage("Use !guessend <target> to end and reveal the target.");
       return NextResponse.json({ ok: true });
     }
 
@@ -160,15 +165,21 @@ export async function POST(req: Request) {
     if (round?.open && round.endsAt && Date.now() >= round.endsAt) {
       await endRound(broadcasterId);
       const guesses = await getAllGuesses(broadcasterId);
-      const winner = pickWinner(round.target, guesses);
-      if (!winner) {
+      if (typeof round.target !== "number") {
         await sendChatMessage(
-          `⏱️ Time! Target was ${round.target}. No valid guesses 😅`,
+          "⏱️ Time! Round closed. End with !guessend <target> to reveal the winner.",
         );
       } else {
-        await sendChatMessage(
-          `⏱️ Time! Target was ${round.target}. Winner: ${winner.entry.name} (guessed ${winner.entry.guess}, off by ${winner.diff})`,
-        );
+        const winner = pickWinner(round.target, guesses);
+        if (!winner) {
+          await sendChatMessage(
+            `⏱️ Time! Target was ${round.target}. No valid guesses 😅`,
+          );
+        } else {
+          await sendChatMessage(
+            `⏱️ Time! Target was ${round.target}. Winner: ${winner.entry.name} (guessed ${winner.entry.guess}, off by ${winner.diff})`,
+          );
+        }
       }
       return NextResponse.json({ ok: true });
     }

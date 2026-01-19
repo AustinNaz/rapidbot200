@@ -4,7 +4,7 @@ export type Round = {
   open: boolean;
   min: number;
   max: number;
-  target: number;
+  target: number | null;
   startedAt: number;
   endsAt?: number; // optional if you want timed rounds
 };
@@ -28,6 +28,14 @@ export async function endRound(broadcasterId: string) {
   if (!round) return null;
   await redis.set(ROUND_KEY(broadcasterId), { ...round, open: false });
   return { ...round, open: false } satisfies Round;
+}
+
+export async function finalizeRound(broadcasterId: string, target: number) {
+  const round = await getRound(broadcasterId);
+  if (!round) return null;
+  const updated: Round = { ...round, open: false, target };
+  await redis.set(ROUND_KEY(broadcasterId), updated);
+  return updated;
 }
 
 export type GuessEntry = { name: string; guess: number; ts: number };
